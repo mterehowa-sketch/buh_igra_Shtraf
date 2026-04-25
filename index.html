@@ -1,0 +1,1933 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Поймай штраф — мини-игра</title>
+  <style>
+    :root{
+      --bg0:#f6f9ff;
+      --bg1:#ffffff;
+      --ink:#0b1220;
+      --muted:#5b6b82;
+      --line:#dbe6ff;
+      --good:#16a34a;
+      --bad:#ef4444;
+      --special:#2563eb;
+      --gold:#d4a017;
+      --assist:#3b82f6;
+      --anti:#10b981;
+      --shadow: 0 14px 40px rgba(11,18,32,.10);
+      --shadow2: 0 10px 20px rgba(11,18,32,.08);
+      --radius: 16px;
+      --gameH: 540px;
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      color:var(--ink);
+      background: radial-gradient(1200px 560px at 30% 10%, #e9f1ff 0%, var(--bg0) 38%, #f7fbff 100%);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .page{
+      min-height:100%;
+      padding: 18px 14px 20px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+    }
+
+    .shell{
+      width:min(1180px, 100%);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .topbar{
+      background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.78));
+      border:1px solid var(--line);
+      box-shadow: var(--shadow2);
+      border-radius: var(--radius);
+      padding: 12px 12px 10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      backdrop-filter: blur(10px);
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .chip{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(243,246,255,.9);
+      border: 1px solid rgba(219,230,255,.9);
+      font-size: 13px;
+      line-height: 1;
+      color: var(--muted);
+      white-space:nowrap;
+      user-select:none;
+    }
+    .chip strong{
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .chip .dot{
+      width:8px; height:8px; border-radius:50%;
+      background: var(--assist);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+      flex:0 0 auto;
+    }
+    .chip.good .dot{ background: var(--good); box-shadow: 0 0 0 3px rgba(22,163,74,.13); }
+    .chip.bad .dot{ background: var(--bad); box-shadow: 0 0 0 3px rgba(239,68,68,.12); }
+    .chip.special .dot{ background: var(--special); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+    .chip.gold .dot{ background: var(--gold); box-shadow: 0 0 0 3px rgba(212,160,23,.14); }
+
+    .spacer{ flex:1 1 auto; }
+
+    .btn{
+      appearance:none;
+      border:none;
+      cursor:pointer;
+      user-select:none;
+      padding: 9px 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      letter-spacing: .2px;
+      font-size: 13px;
+      color: var(--ink);
+      background: rgba(255,255,255,.92);
+      border:1px solid var(--line);
+      box-shadow: 0 8px 18px rgba(11,18,32,.07);
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      background: linear-gradient(180deg, #2f8bff, #2563eb);
+      color:#fff;
+      border-color: rgba(37,99,235,.35);
+      box-shadow: 0 10px 24px rgba(37,99,235,.24);
+    }
+    .btn.danger{
+      background: linear-gradient(180deg, #ff6b6b, #ef4444);
+      color:#fff;
+      border-color: rgba(239,68,68,.38);
+      box-shadow: 0 10px 24px rgba(239,68,68,.18);
+    }
+    .btn.muted{
+      color: var(--muted);
+      background: rgba(243,246,255,.9);
+    }
+    .btn:disabled{
+      cursor:not-allowed;
+      opacity:.55;
+      filter:saturate(.7);
+      transform:none !important;
+    }
+
+    .map{
+      display:grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap:6px;
+      width:100%;
+      margin-top:2px;
+    }
+    .mcell{
+      height: 22px;
+      border-radius: 10px;
+      border:1px solid rgba(219,230,255,.9);
+      background: rgba(255,255,255,.85);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 12px;
+      color: #4b5b73;
+      position:relative;
+      overflow:hidden;
+    }
+    .mcell.current{
+      border-color: rgba(37,99,235,.55);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+      color:#1546b6;
+      background: rgba(37,99,235,.08);
+      font-weight: 800;
+    }
+    .mcell.done::after{
+      content:"";
+      position:absolute; inset:0;
+      background: linear-gradient(90deg, rgba(16,185,129,.18), rgba(22,163,74,.11));
+    }
+    .mcell.done{
+      color:#0e6a3e;
+      border-color: rgba(16,185,129,.45);
+    }
+
+    .gameCard{
+      position:relative;
+      background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.86));
+      border:1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      overflow:hidden;
+    }
+
+    .gameArea{
+      position:relative;
+      width:100%;
+      height: var(--gameH);
+      background:
+        radial-gradient(900px 520px at 70% 0%, rgba(59,130,246,.10) 0%, rgba(59,130,246,0) 55%),
+        radial-gradient(1100px 620px at 10% 20%, rgba(16,185,129,.06) 0%, rgba(16,185,129,0) 50%),
+        linear-gradient(180deg, rgba(246,249,255,.60), rgba(255,255,255,.92));
+      touch-action: none;
+      user-select:none;
+    }
+
+    .softGrid{
+      position:absolute; inset:0;
+      background-image:
+        linear-gradient(to right, rgba(219,230,255,.55) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(219,230,255,.45) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity:.25;
+      pointer-events:none;
+    }
+
+    .catcher{
+      position:absolute;
+      bottom: 16px;
+      width: 150px;
+      height: 42px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(59,130,246,.16), rgba(59,130,246,.08)),
+        linear-gradient(180deg, #ffffff, rgba(255,255,255,.7));
+      border:1px solid rgba(59,130,246,.35);
+      box-shadow: 0 12px 24px rgba(11,18,32,.10);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#155dbd;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    .catcher::before{
+      content:"";
+      position:absolute;
+      top:-10px; left:16px; right:16px;
+      height: 14px;
+      border-radius: 999px;
+      background: radial-gradient(60px 14px at 50% 50%, rgba(59,130,246,.28), rgba(59,130,246,0));
+      opacity:.85;
+    }
+    .catcher.shake{
+      animation: shake .22s ease-in-out 0s 1;
+    }
+    @keyframes shake{
+      0%{ transform: translateX(-50%) translateY(0); }
+      25%{ transform: translateX(-50%) translateY(-2px) translateX(-8px); }
+      60%{ transform: translateX(-50%) translateY(1px) translateX(8px); }
+      100%{ transform: translateX(-50%) translateY(0); }
+    }
+
+    .obj{
+      position:absolute;
+      top:-60px;
+      min-width: 86px;
+      height: 40px;
+      padding: 0 10px;
+      border-radius: 14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight: 900;
+      font-size: 13px;
+      letter-spacing: .2px;
+      box-shadow: 0 14px 22px rgba(11,18,32,.08);
+      border: 1px solid rgba(219,230,255,.9);
+      background: rgba(255,255,255,.9);
+      transform: translateZ(0);
+      will-change: transform, opacity;
+      pointer-events: auto;
+    }
+    .obj.good{
+      color:#0d6a36;
+      border-color: rgba(22,163,74,.45);
+      background: linear-gradient(180deg, rgba(22,163,74,.15), rgba(22,163,74,.06));
+    }
+    .obj.bad{
+      color:#991b1b;
+      border-color: rgba(239,68,68,.45);
+      background: linear-gradient(180deg, rgba(239,68,68,.14), rgba(239,68,68,.06));
+    }
+    .obj.special{
+      color:#123a92;
+      border-color: rgba(37,99,235,.45);
+      background: linear-gradient(180deg, rgba(37,99,235,.14), rgba(37,99,235,.06));
+      box-shadow: 0 14px 22px rgba(37,99,235,.10);
+    }
+    .obj.life{
+      color:#0f766e;
+      border-color: rgba(16,185,129,.55);
+      background: linear-gradient(180deg, rgba(16,185,129,.18), rgba(16,185,129,.07));
+      box-shadow: 0 16px 26px rgba(16,185,129,.14);
+    }
+
+    .obj.pop{
+      animation: pop .18s ease-out 0s 1;
+    }
+    @keyframes pop{
+      0%{ transform: scale(1); opacity:1; }
+      100%{ transform: scale(1.14); opacity:0; }
+    }
+
+    .obj.bad.weak{
+      opacity:.75;
+      filter: saturate(.95) contrast(.95);
+      animation: virus 0.34s ease-in-out infinite;
+    }
+    @keyframes virus{
+      0%{ transform: rotate(-2deg) skewX(-2deg) translateY(0); }
+      50%{ transform: rotate(2deg) skewX(2deg) translateY(1px); }
+      100%{ transform: rotate(-2deg) skewX(-2deg) translateY(0); }
+    }
+
+    .overlayAssist{
+      position:absolute; inset:0;
+      background: radial-gradient(1000px 640px at 50% 25%, rgba(59,130,246,.20) 0%, rgba(59,130,246,.10) 35%, rgba(59,130,246,0) 65%);
+      pointer-events:none;
+      opacity:0;
+      transition: opacity .18s ease;
+    }
+    .overlayAssist.on{ opacity:1; }
+
+    .overlayAnti{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1200px 740px at 50% 20%, rgba(16,185,129,.18) 0%, rgba(16,185,129,.06) 42%, rgba(16,185,129,0) 70%),
+        radial-gradient(1200px 740px at 55% 10%, rgba(212,160,23,.12) 0%, rgba(212,160,23,0) 55%);
+      pointer-events:none;
+      opacity:0;
+      transition: opacity .18s ease;
+    }
+    .overlayAnti.on{ opacity:1; }
+
+    .toast{
+      position:absolute;
+      top: 14px;
+      left:50%;
+      transform: translateX(-50%);
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.92);
+      border:1px solid rgba(219,230,255,.9);
+      box-shadow: 0 12px 24px rgba(11,18,32,.10);
+      font-weight: 800;
+      font-size: 13px;
+      color: #25406d;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .toast.on{
+      opacity:1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .bottomHud{
+      padding: 10px 12px 12px;
+      border-top:1px solid rgba(219,230,255,.9);
+      background: rgba(255,255,255,.78);
+      backdrop-filter: blur(10px);
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    .barBlock{
+      flex: 1 1 320px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width: 280px;
+    }
+    .barHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      font-size: 13px;
+      color: var(--muted);
+      user-select:none;
+    }
+    .barHead strong{ color:var(--ink); }
+    .bar{
+      height: 12px;
+      border-radius: 999px;
+      border:1px solid rgba(219,230,255,.9);
+      background: rgba(243,246,255,.9);
+      overflow:hidden;
+    }
+    .bar > i{
+      display:block;
+      height:100%;
+      width:0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(59,130,246,.90), rgba(37,99,235,.92));
+      transition: width .12s ease;
+    }
+    .bar.anti > i{
+      background: linear-gradient(90deg, rgba(16,185,129,.90), rgba(212,160,23,.86));
+    }
+
+    .modalWrap{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding: 18px 14px;
+      background: rgba(11,18,32,.45);
+      z-index: 50;
+    }
+    .modalWrap.on{ display:flex; }
+    .modal{
+      width: min(760px, 100%);
+      border-radius: 18px;
+      background: rgba(255,255,255,.94);
+      border:1px solid rgba(219,230,255,.9);
+      box-shadow: 0 22px 60px rgba(11,18,32,.22);
+      overflow:hidden;
+    }
+    .modalHeader{
+      padding: 14px 14px 12px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      border-bottom:1px solid rgba(219,230,255,.9);
+      background: linear-gradient(180deg, rgba(243,246,255,.92), rgba(255,255,255,.92));
+    }
+    .modalHeader h2{
+      margin:0;
+      font-size: 16px;
+      letter-spacing:.2px;
+    }
+    .modalBody{
+      padding: 12px 14px 14px;
+      color:#2b3b53;
+      line-height: 1.4;
+      font-size: 14px;
+    }
+    .modalBody .rules{
+      margin: 0;
+      padding-left: 18px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .modalFooter{
+      padding: 12px 14px 14px;
+      border-top:1px solid rgba(219,230,255,.9);
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+      background: rgba(255,255,255,.9);
+    }
+
+    .statsGrid{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap:10px;
+      margin-top: 10px;
+    }
+    .stat{
+      padding: 10px 10px;
+      border-radius: 14px;
+      background: rgba(243,246,255,.9);
+      border:1px solid rgba(219,230,255,.9);
+    }
+    .stat .k{
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .stat .v{
+      margin-top: 4px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .confettiCanvas{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      opacity:0;
+      transition: opacity .2s ease;
+    }
+    .confettiCanvas.on{ opacity:1; }
+
+    @media (max-width: 780px){
+      :root{ --gameH: 620px; }
+      .map{ grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .obj{ min-width: 98px; height: 44px; font-size: 14px; }
+      .catcher{ width: 170px; height: 46px; }
+      .statsGrid{ grid-template-columns: 1fr; }
+    }
+    @media (max-width: 420px){
+      :root{ --gameH: 660px; }
+      .chip{ font-size: 12px; padding: 7px 9px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="shell">
+      <div class="topbar" aria-label="Панель статуса">
+        <div class="row">
+          <div class="chip"><span class="dot"></span><span>Месяц: <strong id="hudMonth">—</strong></span></div>
+          <div class="chip"><span class="dot"></span><span>Квартал: <strong id="hudQuarter">—</strong></span></div>
+          <div class="chip"><span class="dot"></span><span>Время: <strong id="hudTime">—</strong></span></div>
+          <div class="chip good"><span class="dot"></span><span>Очки / план: <strong id="hudScore">0</strong> / <strong id="hudGoal">0</strong></span></div>
+          <div class="chip"><span class="dot"></span><span>Жизни: <strong id="hudLives">0</strong></span></div>
+          <div class="chip bad"><span class="dot"></span><span>Штрафы: <strong id="hudBadCount">0</strong></span></div>
+          <div class="chip bad"><span class="dot"></span><span>Сумма: <strong id="hudRub">0 ₽</strong></span></div>
+          <div class="spacer"></div>
+          <button class="btn muted" id="btnSound" type="button" aria-label="Звук">
+            <span id="soundIcon">🔇</span>
+            <span id="soundText">Звук: выкл</span>
+          </button>
+          <button class="btn" id="btnHelp" type="button">Помощь</button>
+        </div>
+        <div class="map" id="monthMap" aria-label="Карта 12 месяцев"></div>
+      </div>
+
+      <div class="gameCard">
+        <div class="gameArea" id="gameArea" aria-label="Игровое поле">
+          <canvas id="confetti" class="confettiCanvas"></canvas>
+          <div class="softGrid"></div>
+          <div class="overlayAssist" id="assistOverlay"></div>
+          <div class="overlayAnti" id="antiOverlay"></div>
+          <div class="toast" id="toast"></div>
+          <div class="catcher" id="catcher" aria-label="Корзина">Корзина</div>
+        </div>
+        <div class="bottomHud" aria-label="Панель помощи">
+          <div class="barBlock">
+            <div class="barHead">
+              <span><strong>Консультация бухгалтера</strong> <span id="hudConsultPct">0%</span></span>
+              <button class="btn" id="btnConsult" type="button" disabled>Консультация</button>
+            </div>
+            <div class="bar"><i id="barConsult"></i></div>
+          </div>
+          <div class="barBlock">
+            <div class="barHead">
+              <span><strong>Антиштраф</strong> <span id="hudAntiPct">0%</span></span>
+              <button class="btn primary" id="btnAnti" type="button" disabled>Антиштраф</button>
+            </div>
+            <div class="bar anti"><i id="barAnti"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start / Help / Result modals -->
+  <div class="modalWrap on" id="startModal" role="dialog" aria-modal="true" aria-label="Как играть">
+    <div class="modal">
+      <div class="modalHeader">
+        <div>
+          <h2>Как играть</h2>
+          <div style="margin-top:6px;color:#51627b;font-size:13px;">Лёгкая аркада про контроль месяца — без тяжёлых формулировок.</div>
+        </div>
+        <button class="btn muted" id="btnStartClose" type="button" aria-label="Закрыть">Esc</button>
+      </div>
+      <div class="modalBody">
+        <ul class="rules">
+          <li>Ловите зелёные объекты — они дают очки.</li>
+          <li>Избегайте красных объектов — они приносят штрафы и могут отнять жизнь.</li>
+          <li>Собирайте специальные объекты — они заряжают консультацию бухгалтера.</li>
+          <li>Шкала стресса заряжает Антиштраф.</li>
+          <li>Консультация — малая помощь: подсвечивает полезное и ослабляет штрафы.</li>
+          <li>Антиштраф — сильная помощь: убирает негатив, притягивает полезные объекты и помогает закрыть план.</li>
+          <li>Чтобы пройти месяц, нужно сохранить жизни и набрать минимум 95% от плана.</li>
+        </ul>
+        <div style="margin-top:10px;color:#51627b;font-size:13px;">
+          Управление: мышь / стрелки (ПК), перетаскивание пальцем (мобильный).
+        </div>
+      </div>
+      <div class="modalFooter">
+        <button class="btn primary" id="btnStartJan" type="button">Начать с января</button>
+        <button class="btn" id="btnStartApr" type="button">Сразу с апреля</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modalWrap" id="helpModal" role="dialog" aria-modal="true" aria-label="Помощь">
+    <div class="modal">
+      <div class="modalHeader">
+        <div>
+          <h2>Помощь</h2>
+          <div style="margin-top:6px;color:#51627b;font-size:13px;">Игра поставлена на паузу.</div>
+        </div>
+        <button class="btn muted" id="btnHelpCloseTop" type="button" aria-label="Закрыть">Esc</button>
+      </div>
+      <div class="modalBody">
+        <ul class="rules">
+          <li>Зелёные объекты дают очки.</li>
+          <li>Красные объекты приносят штрафы и могут отнять жизнь.</li>
+          <li>Специальные объекты заряжают консультацию бухгалтера.</li>
+          <li>Шкала стресса заряжает Антиштраф.</li>
+          <li>Консультация — малая помощь: подсвечивает полезное и ослабляет штрафы.</li>
+          <li>Антиштраф — сильная помощь: убирает негатив, притягивает полезные объекты и помогает закрыть план.</li>
+          <li>Чтобы пройти месяц, нужно сохранить жизни и набрать минимум 95% от плана.</li>
+        </ul>
+      </div>
+      <div class="modalFooter">
+        <button class="btn primary" id="btnHelpClose" type="button">Продолжить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modalWrap" id="resultModal" role="dialog" aria-modal="true" aria-label="Итоги месяца">
+    <div class="modal">
+      <div class="modalHeader">
+        <div>
+          <h2 id="resultTitle">—</h2>
+          <div id="resultSubtitle" style="margin-top:6px;color:#51627b;font-size:13px;">—</div>
+        </div>
+        <button class="btn muted" id="btnResultCloseTop" type="button" aria-label="Закрыть">Esc</button>
+      </div>
+      <div class="modalBody">
+        <div id="resultHint" style="display:none; margin-bottom:10px; padding:10px 10px; border-radius:14px; border:1px solid rgba(219,230,255,.9); background: rgba(59,130,246,.08); color:#25406d; font-weight:800;"></div>
+        <div id="resultStats" class="statsGrid"></div>
+      </div>
+      <div class="modalFooter" id="resultButtons"></div>
+    </div>
+  </div>
+
+  <script>
+    /*
+      Мини-игра «Поймай штраф» — полностью автономный index.html без библиотек.
+
+      Архитектура (по ТЗ): initGame/startGame/startMonth/getMonthConfig/spawnObject/updateGame/...
+      Игровой цикл: requestAnimationFrame
+    */
+
+    // -----------------------------
+    // Константы и данные
+    // -----------------------------
+    const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    const QUARTERS = ["1 квартал","2 квартал","3 квартал","4 квартал"];
+    const monthGoals = [150,170,190,200,220,240,250,270,290,300,320,340];
+
+    const GOOD_LABELS = ["Доход","Отчёт","Документы","Вычет","Срок","Акт","Платёж"];
+    const BAD_LABELS = ["Штраф","Пени","Ошибка","Фейк","Просрочка","Хаос"];
+    const SPECIAL_LABELS = ["Совет","Консультация","Подсказка","Бухгалтер","Щит"];
+
+    const PENALTY_RUB_VALUES = [1000,3000,5000,7000];
+
+    const GameStates = Object.freeze({
+      START_SCREEN: "START_SCREEN",
+      PLAYING: "PLAYING",
+      PAUSED: "PAUSED",
+      CONSULTATION_ACTIVE: "CONSULTATION_ACTIVE",
+      ANTIPENALTY_ACTIVE: "ANTIPENALTY_ACTIVE",
+      MONTH_RESULT: "MONTH_RESULT",
+      FINAL_RESULT: "FINAL_RESULT",
+    });
+
+    // -----------------------------
+    // DOM
+    // -----------------------------
+    const el = {
+      gameArea: document.getElementById("gameArea"),
+      catcher: document.getElementById("catcher"),
+      assistOverlay: document.getElementById("assistOverlay"),
+      antiOverlay: document.getElementById("antiOverlay"),
+      toast: document.getElementById("toast"),
+      confetti: document.getElementById("confetti"),
+
+      hudMonth: document.getElementById("hudMonth"),
+      hudQuarter: document.getElementById("hudQuarter"),
+      hudTime: document.getElementById("hudTime"),
+      hudScore: document.getElementById("hudScore"),
+      hudGoal: document.getElementById("hudGoal"),
+      hudLives: document.getElementById("hudLives"),
+      hudBadCount: document.getElementById("hudBadCount"),
+      hudRub: document.getElementById("hudRub"),
+
+      monthMap: document.getElementById("monthMap"),
+
+      btnHelp: document.getElementById("btnHelp"),
+      btnSound: document.getElementById("btnSound"),
+      soundIcon: document.getElementById("soundIcon"),
+      soundText: document.getElementById("soundText"),
+
+      barConsult: document.getElementById("barConsult"),
+      barAnti: document.getElementById("barAnti"),
+      hudConsultPct: document.getElementById("hudConsultPct"),
+      hudAntiPct: document.getElementById("hudAntiPct"),
+      btnConsult: document.getElementById("btnConsult"),
+      btnAnti: document.getElementById("btnAnti"),
+
+      startModal: document.getElementById("startModal"),
+      btnStartJan: document.getElementById("btnStartJan"),
+      btnStartApr: document.getElementById("btnStartApr"),
+      btnStartClose: document.getElementById("btnStartClose"),
+
+      helpModal: document.getElementById("helpModal"),
+      btnHelpClose: document.getElementById("btnHelpClose"),
+      btnHelpCloseTop: document.getElementById("btnHelpCloseTop"),
+
+      resultModal: document.getElementById("resultModal"),
+      resultTitle: document.getElementById("resultTitle"),
+      resultSubtitle: document.getElementById("resultSubtitle"),
+      resultHint: document.getElementById("resultHint"),
+      resultStats: document.getElementById("resultStats"),
+      resultButtons: document.getElementById("resultButtons"),
+      btnResultCloseTop: document.getElementById("btnResultCloseTop"),
+    };
+
+    // -----------------------------
+    // Состояние игры (по ТЗ)
+    // -----------------------------
+    let state = GameStates.START_SCREEN;
+
+    let currentMonth = 0;
+    let currentQuarter = 0;
+    let timeLeft = 0;
+    let monthScore = 0;
+    let totalScore = 0;
+    let goal = 0;
+    let requiredScore = 0;
+    let lives = 3;
+    let penalties = 0;      // количество "плохих" пойманных объектов (для статистики)
+    let penaltyRub = 0;
+    let consultationCharge = 0; // 0..100 сохраняется между месяцами
+    let antiPenaltyCharge = 0;  // 0..100 сохраняется между месяцами
+    let consultationActive = false;
+    let antiPenaltyActive = false;
+    let objects = [];
+    let completedMonths = Array(12).fill(false);
+    let goodCaught = 0;
+    let badCaught = 0;
+    let specialCaught = 0;
+    let consultationsUsed = 0;
+    let antiPenaltiesUsed = 0;
+    let bestMonth = { idx: 0, score: -Infinity };
+    let hardestMonth = { idx: 0, misses: -Infinity }; // "сложность" по стрессу/ошибкам
+    let soundEnabled = false;
+
+    // Дополнительно
+    let monthConfig = null;
+    let monthBadForLife = 0;
+    let badForLifeThreshold = 3;
+    let goodStreak = 0;
+    let lastTs = 0;
+    let spawnAcc = 0;
+    let secondAcc = 0;
+    let antiLast10sBonusGiven = false;
+    let pointerActive = false;
+    let pointerOffsetX = 0;
+    let catcherX = 0; // left px
+    let catcherTargetX = 0;
+    let keyboardLeft = false, keyboardRight = false;
+    let toastTimer = 0;
+    let assistTimeLeft = 0;
+    let antiTimeLeft = 0;
+    let antiLifeSpawnedThisMonth = false;
+
+    // Конфетти
+    let confettiOn = false;
+    let confettiParts = [];
+    let confettiLast = 0;
+
+    // Аудио
+    let audioCtx = null;
+
+    // -----------------------------
+    // Вспомогательные утилиты
+    // -----------------------------
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const randi = (a, b) => Math.floor(rand(a, b + 1));
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const fmtRub = (n) => n.toLocaleString("ru-RU") + " ₽";
+    const pct = (n) => Math.round(clamp(n, 0, 100));
+
+    function getHelpMultiplier(monthIndex){
+      if (monthIndex < 3) return 1.00;
+      if (monthIndex < 6) return 1.10;
+      if (monthIndex < 9) return 1.15;
+      return 1.20;
+    }
+
+    // -----------------------------
+    // Обязательные функции (по ТЗ)
+    // -----------------------------
+    function initGame(){
+      buildMonthMap();
+      bindInput();
+      resizeConfetti();
+      updateHUD();
+      updateRoundMap();
+    }
+
+    function startGame(){
+      resetGame();
+      showStartScreen();
+    }
+
+    function startMonth(monthIndex){
+      // сброс месячного состояния (без сброса накоплений помощи)
+      currentMonth = clamp(monthIndex, 0, 11);
+      currentQuarter = Math.floor(currentMonth / 3);
+      monthConfig = getMonthConfig(currentMonth);
+
+      goal = monthConfig.goal;
+      requiredScore = Math.ceil(goal * 0.95);
+      timeLeft = monthConfig.duration;
+      monthScore = 0;
+      lives = 3;
+      penalties = 0;
+      monthBadForLife = 0;
+      goodStreak = 0;
+      antiLast10sBonusGiven = false;
+      antiLifeSpawnedThisMonth = false;
+
+      badForLifeThreshold = currentMonth < 3 ? 3 : 2;
+
+      // чистим объекты
+      objects.forEach(o => o.el.remove());
+      objects = [];
+
+      // положение корзины
+      const areaW = el.gameArea.clientWidth;
+      const cW = el.catcher.offsetWidth;
+      catcherX = (areaW - cW) / 2;
+      catcherTargetX = catcherX;
+      el.catcher.style.left = catcherX + "px";
+      el.catcher.style.transform = "translateX(0)";
+
+      consultationActive = false;
+      antiPenaltyActive = false;
+      assistTimeLeft = 0;
+      antiTimeLeft = 0;
+      el.assistOverlay.classList.remove("on");
+      el.antiOverlay.classList.remove("on");
+
+      toastHide(true);
+
+      state = GameStates.PLAYING;
+      updateHUD();
+      updateRoundMap();
+      lastTs = performance.now();
+      spawnAcc = 0;
+      secondAcc = 0;
+      requestAnimationFrame(updateGame);
+    }
+
+    function getMonthConfig(index){
+      const quarter = Math.floor(index / 3);
+      const monthInQuarter = index % 3;
+
+      // Базовая идея: скорость растёт, спавн чаще, шанс красных растёт, шанс спец чуть падает.
+      // Будем держать баланс так, чтобы помощь успевала накапливаться (за счёт helpMultiplier).
+      const baseSpeed = 86 + quarter * 20 + monthInQuarter * 13; // px/s
+      const spawn = Math.max(560, 1080 - quarter * 90 - monthInQuarter * 70); // ms
+      const badChance = Math.min(0.48, 0.18 + quarter * 0.04 + monthInQuarter * 0.035);
+      const specialChance = Math.max(0.08, 0.13 - quarter * 0.006);
+      const duration = index < 3 ? 35 : index < 9 ? 38 : 40;
+
+      return { speed: baseSpeed, spawn, badChance, specialChance, duration, goal: monthGoals[index] };
+    }
+
+    function spawnObject(){
+      if (state !== GameStates.PLAYING && state !== GameStates.CONSULTATION_ACTIVE && state !== GameStates.ANTIPENALTY_ACTIVE) return;
+
+      const areaW = el.gameArea.clientWidth;
+      const pad = 10;
+
+      const isAnti = antiPenaltyActive;
+      const isConsult = consultationActive;
+
+      // В антиштрафе: красных почти нет (или лопаются).
+      let badChance = monthConfig.badChance;
+      let specialChance = monthConfig.specialChance;
+      let goodChance = 1 - badChance - specialChance;
+
+      if (isConsult){
+        // спец чуть чаще, красные слабее (но могут появляться)
+        specialChance = clamp(specialChance + 0.03, 0.08, 0.20);
+        badChance = clamp(badChance * 0.85, 0.08, 0.50);
+        goodChance = clamp(1 - badChance - specialChance, 0.35, 0.85);
+      }
+      if (isAnti){
+        badChance = 0.02;
+        specialChance = clamp(specialChance + 0.05, 0.10, 0.28);
+        goodChance = clamp(1 - badChance - specialChance, 0.50, 0.95);
+      }
+
+      const roll = Math.random();
+      let type = "good";
+      if (roll < badChance) type = "bad";
+      else if (roll < badChance + specialChance) type = "special";
+
+      // Бонусная жизнь появляется только в антиштрафе (редко, максимум 1 за месяц).
+      if (isAnti && !antiLifeSpawnedThisMonth && lives < 4 && Math.random() < 0.10){
+        type = "life";
+        antiLifeSpawnedThisMonth = true;
+      }
+
+      const objEl = document.createElement("div");
+      objEl.className = "obj " + type;
+      objEl.setAttribute("role", "button");
+      objEl.setAttribute("tabindex", "-1");
+
+      const label =
+        type === "good" ? pick(GOOD_LABELS)
+        : type === "bad" ? pick(BAD_LABELS)
+        : type === "special" ? pick(SPECIAL_LABELS)
+        : "+1 жизнь";
+
+      objEl.textContent = label;
+
+      const w = type === "life" ? 92 : clamp(86 + label.length * 3.4, 86, 150);
+      objEl.style.width = w + "px";
+
+      const x = clamp(rand(pad, areaW - w - pad), pad, Math.max(pad, areaW - w - pad));
+      const y = -60;
+      // Позиционируем объекты через transform, чтобы избежать двойных смещений (left + transform).
+      objEl.style.left = "0px";
+      objEl.style.top = "0px";
+      objEl.style.transform = `translate(${x}px, ${y}px)`;
+
+      // Во время консультации красные можно кликать, чтобы лопнули без штрафа (+4 очка).
+      if (type === "bad"){
+        objEl.addEventListener("pointerdown", (ev) => {
+          if (!consultationActive) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          // обезвреживание
+          addScore(4);
+          toastShow("Консультация: красный объект обезврежен (+4)");
+          playSound("pop");
+          removeObjectByEl(objEl, true);
+        });
+      }
+
+      el.gameArea.appendChild(objEl);
+
+      const speedMul = consultationActive ? 0.80 : antiPenaltyActive ? 0.88 : 1.0; // консультация замедляет на ~20%
+
+      const obj = {
+        id: cryptoRandomId(),
+        type,
+        label,
+        x, y,
+        w, h: type === "life" ? 40 : 40,
+        vy: monthConfig.speed * speedMul * (0.88 + Math.random() * 0.34),
+        drift: (Math.random() < 0.18) ? rand(-12, 12) : 0,
+        el: objEl,
+        alive: true,
+        attracted: false,
+      };
+
+      if (consultationActive && type === "bad"){
+        objEl.classList.add("weak");
+      }
+      if (consultationActive && type === "good"){
+        objEl.style.boxShadow = "0 14px 22px rgba(22,163,74,.18)";
+        objEl.style.borderColor = "rgba(22,163,74,.65)";
+      }
+
+      objects.push(obj);
+    }
+
+    function updateGame(ts){
+      const dt = Math.min(0.05, (ts - lastTs) / 1000);
+      lastTs = ts;
+
+      // конфетти может жить поверх (в финале)
+      if (confettiOn) updateConfetti(ts);
+
+      if (state === GameStates.PAUSED || state === GameStates.START_SCREEN || state === GameStates.MONTH_RESULT || state === GameStates.FINAL_RESULT){
+        requestAnimationFrame(updateGame);
+        return;
+      }
+
+      updatePlayer(dt);
+      updateObjects(dt);
+
+      // спавн
+      spawnAcc += dt * 1000;
+      const spawnInterval = monthConfig.spawn * (antiPenaltyActive ? 1.12 : 1.0); // в антиштрафе чуть спокойнее
+      while (spawnAcc >= spawnInterval){
+        spawnAcc -= spawnInterval;
+        spawnObject();
+      }
+
+      // таймер месяца
+      secondAcc += dt;
+      if (secondAcc >= 1){
+        const steps = Math.floor(secondAcc);
+        secondAcc -= steps;
+        timeLeft -= steps;
+
+        // стресс-бонус за 10 секунд до конца, если план не выполнен (1 раз за месяц)
+        if (!antiLast10sBonusGiven && timeLeft <= 10 && monthScore < goal){
+          antiLast10sBonusGiven = true;
+          const hm = getHelpMultiplier(currentMonth);
+          antiPenaltyCharge = clamp(antiPenaltyCharge + 20 * hm, 0, 100);
+          toastShow("Стресс: до конца мало времени (+Антиштраф)");
+          playSound("stress");
+        }
+
+        if (timeLeft <= 0){
+          // время вышло
+          const won = lives > 0 && monthScore >= requiredScore;
+          endCurrentMonth(won, "time");
+          return;
+        }
+      }
+
+      // тост
+      if (toastTimer > 0){
+        toastTimer -= dt;
+        if (toastTimer <= 0) toastHide();
+      }
+
+      // эффекты помощи
+      if (consultationActive){
+        assistTimeLeft -= dt;
+        if (assistTimeLeft <= 0){
+          consultationActive = false;
+          el.assistOverlay.classList.remove("on");
+          toastShow("Консультация завершена");
+          if (!antiPenaltyActive && state !== GameStates.PAUSED) state = GameStates.PLAYING;
+        }
+      }
+      if (antiPenaltyActive){
+        antiTimeLeft -= dt;
+        if (antiTimeLeft <= 0){
+          antiPenaltyActive = false;
+          el.antiOverlay.classList.remove("on");
+          toastShow("Антиштраф завершён");
+          if (!consultationActive && state !== GameStates.PAUSED) state = GameStates.PLAYING;
+        }
+      }
+
+      updateHUD();
+      requestAnimationFrame(updateGame);
+    }
+
+    function updatePlayer(dt){
+      const areaW = el.gameArea.clientWidth;
+      const cW = el.catcher.offsetWidth;
+
+      // клавиатура (только на desktop)
+      const kbSpeed = 560; // px/s
+      if (keyboardLeft) catcherTargetX -= kbSpeed * dt;
+      if (keyboardRight) catcherTargetX += kbSpeed * dt;
+
+      // сглаживание движения к цели
+      const follow = 18;
+      catcherX += (catcherTargetX - catcherX) * clamp(follow * dt, 0, 1);
+
+      catcherX = clamp(catcherX, 8, areaW - cW - 8);
+      catcherTargetX = clamp(catcherTargetX, 8, areaW - cW - 8);
+
+      el.catcher.style.left = catcherX + "px";
+    }
+
+    function updateObjects(dt){
+      const areaH = el.gameArea.clientHeight;
+      const areaW = el.gameArea.clientWidth;
+
+      const catcherRect = getCatcherRect();
+      const attractOn = antiPenaltyActive;
+
+      for (const o of objects){
+        if (!o.alive) continue;
+
+        // притяжение в антиштрафе (зелёные и спец слегка тянутся к корзине)
+        if (attractOn && (o.type === "good" || o.type === "special" || o.type === "life")){
+          const cx = catcherRect.x + catcherRect.w / 2;
+          const ox = o.x + o.w / 2;
+          const dx = cx - ox;
+          o.x += clamp(dx * 0.9 * dt, -220 * dt, 220 * dt);
+          o.attracted = true;
+        } else if (o.drift){
+          o.x += o.drift * dt;
+        }
+
+        o.y += o.vy * dt;
+        o.x = clamp(o.x, 6, areaW - o.w - 6);
+
+        // красные в антиштрафе появляются и тут же лопаются
+        if (antiPenaltyActive && o.type === "bad"){
+          // мгновенное "лопанье" без штрафов, +3 очка как снятый риск
+          addScore(3);
+          playSound("pop");
+          removeObject(o, true);
+          continue;
+        }
+
+        o.el.style.transform = `translate(${o.x}px, ${o.y}px)`;
+
+        // коллизия с корзиной (простая AABB)
+        if (aabbHit({x:o.x, y:o.y, w:o.w, h:o.h}, catcherRect)){
+          handleCatch(o);
+          continue;
+        }
+
+        // ушёл вниз
+        if (o.y > areaH + 80){
+          missObject(o);
+        }
+      }
+
+      // чистка массива
+      objects = objects.filter(o => o.alive);
+    }
+
+    function handleCatch(object){
+      if (!object.alive) return;
+
+      if (object.type === "good"){
+        goodCaught++;
+        goodStreak++;
+
+        const add = antiPenaltyActive ? 18 : consultationActive ? 12 : 10;
+        addScore(add);
+
+        if (goodStreak >= 3){
+          // серия 3 хороших подряд: +10% консультации (с мультипликатором)
+          goodStreak = 0;
+          const hm = getHelpMultiplier(currentMonth);
+          consultationCharge = clamp(consultationCharge + 10 * hm, 0, 100);
+          toastShow("Серия полезного: +Консультация");
+          playSound("streak");
+        } else {
+          playSound("good");
+        }
+
+        removeObject(object, false);
+        return;
+      }
+
+      if (object.type === "special"){
+        specialCaught++;
+        goodStreak = 0;
+
+        const hm = getHelpMultiplier(currentMonth);
+        consultationCharge = clamp(consultationCharge + 35 * hm, 0, 100);
+
+        // небольшой бонус очков
+        const add = antiPenaltyActive ? 8 : 3;
+        addScore(add);
+
+        toastShow("Консультация заряжается");
+        playSound("special");
+        removeObject(object, false);
+        return;
+      }
+
+      if (object.type === "life"){
+        goodStreak = 0;
+        if (lives < 4){
+          lives += 1;
+          toastShow("+1 жизнь (только в этом месяце)");
+          playSound("life");
+        } else {
+          toastShow("Жизней уже максимум");
+          playSound("click");
+        }
+        removeObject(object, false);
+        return;
+      }
+
+      if (object.type === "bad"){
+        badCaught++;
+        goodStreak = 0;
+        penalties++;
+
+        // красные слабее в консультации
+        const delta = consultationActive ? -8 : -15;
+        addScore(delta);
+
+        penaltyRub += pick(PENALTY_RUB_VALUES);
+
+        // тряска корзины
+        el.catcher.classList.remove("shake");
+        void el.catcher.offsetWidth; // reflow для повторной анимации
+        el.catcher.classList.add("shake");
+
+        // заряд антиштрафа (стресс)
+        const hm = getHelpMultiplier(currentMonth);
+        antiPenaltyCharge = clamp(antiPenaltyCharge + 35 * hm, 0, 100);
+
+        // логика потери жизни
+        monthBadForLife += 1;
+        if (monthBadForLife >= badForLifeThreshold){
+          monthBadForLife = 0;
+          loseLife();
+        }
+
+        toastShow(consultationActive ? "Штраф ослаблен консультацией" : "Штраф пойман");
+        playSound("bad");
+        removeObject(object, false);
+        return;
+      }
+    }
+
+    function missObject(object){
+      if (!object.alive) return;
+
+      if (object.type === "good"){
+        // пропущен хороший: стресс +12% к антиштрафу
+        const hm = getHelpMultiplier(currentMonth);
+        antiPenaltyCharge = clamp(antiPenaltyCharge + 12 * hm, 0, 100);
+        goodStreak = 0;
+        toastShow("Пропуск полезного: стресс (+Антиштраф)");
+        playSound("miss");
+      }
+      // спец/плохой/жизнь можно просто пропустить без доп. логики
+      removeObject(object, false);
+    }
+
+    function activateConsultation(){
+      if (consultationCharge < 100) return;
+      if (state !== GameStates.PLAYING) return;
+
+      consultationCharge = 0;
+      consultationActive = true;
+      assistTimeLeft = 7;
+      consultationsUsed++;
+      state = GameStates.CONSULTATION_ACTIVE;
+
+      el.assistOverlay.classList.add("on");
+      toastShow("Консультация: красные объекты стали слабее");
+      playSound("consult");
+
+      // все текущие красные становятся "слабыми"
+      for (const o of objects){
+        if (o.type === "bad" && o.alive){
+          o.el.classList.add("weak");
+        }
+        if (o.type === "good" && o.alive){
+          o.el.style.boxShadow = "0 14px 22px rgba(22,163,74,.18)";
+          o.el.style.borderColor = "rgba(22,163,74,.65)";
+        }
+      }
+    }
+
+    function activateAntiPenalty(){
+      if (antiPenaltyCharge < 100) return;
+      if (state !== GameStates.PLAYING && state !== GameStates.CONSULTATION_ACTIVE) return;
+
+      antiPenaltyCharge = 0;
+      antiPenaltyActive = true;
+      antiTimeLeft = 6;
+      antiPenaltiesUsed++;
+      state = GameStates.ANTIPENALTY_ACTIVE;
+
+      el.antiOverlay.classList.add("on");
+      toastShow("Антиштраф активирован: учёт под контролем");
+      playSound("anti");
+
+      // эффект при активации:
+      // - красные взрываются и исчезают (+3 за каждый)
+      // - зелёные и спец притягиваются к корзине
+      let removedBad = 0;
+      for (const o of objects){
+        if (!o.alive) continue;
+        if (o.type === "bad"){
+          removedBad++;
+          addScore(3);
+          removeObject(o, true);
+        } else if (o.type === "good" || o.type === "special" || o.type === "life"){
+          o.attracted = true;
+        }
+      }
+      if (removedBad > 0){
+        toastShow(`Антиштраф: очищено рисков: ${removedBad}`);
+      }
+
+      // восполнение недостающих очков (по ТЗ)
+      if (monthScore < goal){
+        const bonus = Math.min(60, goal - monthScore);
+        if (bonus > 0){
+          addScore(bonus);
+          toastShow(`Антиштраф помог закрыть план (+${bonus})`);
+        }
+      }
+
+      // если консультация была активна — эффекты перекрываются антиштрафом, но консультация считается активной до конца таймера
+      // (чтобы не ломать таймеры; визуально доминирует антиштраф)
+    }
+
+    function endCurrentMonth(won, reason){
+      // остановка
+      state = GameStates.MONTH_RESULT;
+      consultationActive = false;
+      antiPenaltyActive = false;
+      assistTimeLeft = 0;
+      antiTimeLeft = 0;
+      el.assistOverlay.classList.remove("on");
+      el.antiOverlay.classList.remove("on");
+
+      // удалить оставшиеся объекты
+      objects.forEach(o => { if (o.alive) removeObject(o, true); });
+      objects = [];
+
+      // пометки и статистика
+      if (won){
+        completedMonths[currentMonth] = true;
+        totalScore += monthScore;
+        if (monthScore > bestMonth.score){
+          bestMonth = { idx: currentMonth, score: monthScore };
+        }
+      }
+
+      // оценка "самого сложного" месяца: больше всего штрафов+потерь/стресса
+      const difficultyMark = penalties * 2 + (3 - lives) * 4 + (antiLast10sBonusGiven ? 2 : 0);
+      if (difficultyMark > hardestMonth.misses){
+        hardestMonth = { idx: currentMonth, misses: difficultyMark };
+      }
+
+      showMonthResult(won, reason);
+    }
+
+    function showMonthResult(won, reason){
+      const okTexts = [
+        "Месяц закрыт: отчёты сданы, дедлайны под контролем.",
+        "Хорошо! Цифры сошлись, порядок удержали.",
+        "Период закрыт без лишней паники.",
+        "Документы собраны, штрафы не испортили результат.",
+        "Отлично! Бухгалтерский поток прошли уверенно.",
+      ];
+      const okFinance = [
+        "Финансовое состояние устойчивое: обязательства выполнены, штрафные риски снижены.",
+        "Период закрыт спокойно: полезных действий хватило для контроля ситуации.",
+        "Бизнес выдержал нагрузку месяца: сроки и документы под контролем.",
+        "Результат устойчивый: штрафы не превысили возможности бизнеса.",
+        "Месяц прошёл без критичных потерь: порядок в цифрах сохранён.",
+      ];
+
+      const failByScore = [
+        "Полезных действий оказалось недостаточно: месяц не закрыт по плану.",
+        "Финансовый план месяца не выполнен: нужно собрать больше полезных объектов.",
+        "Нагрузка месяца оказалась выше результата: попробуйте активнее использовать помощь.",
+        "Месяц не закрыт: не хватило полезных действий для устойчивого результата.",
+      ];
+      const failByLives = [
+        "Штрафы за месяц оказались выше допустимого уровня.",
+        "Ошибки накопились быстрее, чем удалось восстановить порядок.",
+        "Санкции и просрочки перегрузили месяц.",
+        "Финансовая устойчивость просела из-за штрафов и ошибок.",
+      ];
+
+      const title = won ? "Месяц закрыт" : "Месяц не закрыт";
+      const sub = won ? (pick(okTexts) + " " + pick(okFinance)) : (reason === "lives" ? pick(failByLives) : pick(failByScore));
+
+      el.resultTitle.textContent = title;
+      el.resultSubtitle.textContent = sub;
+
+      const antiAvail = antiPenaltyCharge >= 100;
+      const consultAvail = consultationCharge >= 100;
+
+      let hint = "";
+      if (!won){
+        if (antiAvail) hint = "Антиштраф был доступен — попробуйте использовать его раньше.";
+        else if (consultAvail) hint = "Консультация была доступна — она помогает легче пройти сложный поток.";
+      }
+      if (hint){
+        el.resultHint.style.display = "block";
+        el.resultHint.textContent = hint;
+      } else {
+        el.resultHint.style.display = "none";
+        el.resultHint.textContent = "";
+      }
+
+      // статистика (по ТЗ)
+      const stats = [
+        ["Очки месяца", monthScore],
+        ["План месяца", goal],
+        ["Минимум для закрытия месяца", requiredScore],
+        ["Общие очки", totalScore],
+        ["Количество штрафов", penalties],
+        ["Сумма штрафов", fmtRub(penaltyRub)],
+        ["Использовано консультаций", consultationsUsed],
+        ["Использовано антиштрафов", antiPenaltiesUsed],
+        ["Остаток жизней", lives],
+      ];
+      el.resultStats.innerHTML = "";
+      for (const [k, v] of stats){
+        const d = document.createElement("div");
+        d.className = "stat";
+        d.innerHTML = `<div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(String(v))}</div>`;
+        el.resultStats.appendChild(d);
+      }
+
+      // кнопки
+      el.resultButtons.innerHTML = "";
+      if (won){
+        const isFinal = currentMonth === 11;
+        const btn = document.createElement("button");
+        btn.className = "btn primary";
+        btn.type = "button";
+        btn.textContent = isFinal ? "Финал года" : "Следующий месяц";
+        btn.addEventListener("click", () => {
+          closeResult();
+          if (isFinal){
+            showFinalResult();
+          } else {
+            startMonth(currentMonth + 1);
+          }
+        });
+        el.resultButtons.appendChild(btn);
+      } else {
+        const retry = document.createElement("button");
+        retry.className = "btn primary";
+        retry.type = "button";
+        retry.textContent = "Повторить месяц";
+        retry.addEventListener("click", () => {
+          closeResult();
+          // по ТЗ можно оставить прогресс помощи как есть
+          startMonth(currentMonth);
+        });
+
+        const restart = document.createElement("button");
+        restart.className = "btn";
+        restart.type = "button";
+        restart.textContent = "Начать год заново";
+        restart.addEventListener("click", () => {
+          closeResult();
+          resetGame();
+          showStartScreen();
+        });
+
+        el.resultButtons.appendChild(retry);
+        el.resultButtons.appendChild(restart);
+      }
+
+      el.resultModal.classList.add("on");
+      updateHUD();
+      updateRoundMap();
+
+      playSound(won ? "win" : "lose");
+    }
+
+    function showFinalResult(){
+      state = GameStates.FINAL_RESULT;
+      el.resultModal.classList.remove("on");
+
+      // конфетти только в финале
+      confettiStart();
+      playSound("final");
+
+      // финальный экран через resultModal (переиспользуем)
+      el.resultTitle.textContent = "Год закрыт";
+      el.resultSubtitle.textContent = "Поздравляем! Год закрыт спокойно: отчёты сданы, сроки соблюдены, налоговая претензий не имеет.";
+      el.resultHint.style.display = "none";
+
+      const stats = [
+        ["Общий счёт", totalScore],
+        ["Всего штрафов", badCaught],
+        ["Сумма штрафов", fmtRub(penaltyRub)],
+        ["Использовано консультаций", consultationsUsed],
+        ["Использовано антиштрафов", antiPenaltiesUsed],
+        ["Лучший месяц по очкам", `${MONTHS[bestMonth.idx]} (${bestMonth.score})`],
+        ["Самый сложный месяц", MONTHS[hardestMonth.idx]],
+      ];
+      el.resultStats.innerHTML = "";
+      for (const [k, v] of stats){
+        const d = document.createElement("div");
+        d.className = "stat";
+        d.innerHTML = `<div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(String(v))}</div>`;
+        el.resultStats.appendChild(d);
+      }
+
+      el.resultButtons.innerHTML = "";
+      const again = document.createElement("button");
+      again.className = "btn primary";
+      again.type = "button";
+      again.textContent = "Играть заново";
+      again.addEventListener("click", () => {
+        confettiStop();
+        closeResult();
+        resetGame();
+        showStartScreen();
+      });
+      const exit = document.createElement("button");
+      exit.className = "btn";
+      exit.type = "button";
+      exit.textContent = "Выйти из игры";
+      exit.addEventListener("click", () => {
+        confettiStop();
+        closeResult();
+        showStartScreen();
+      });
+      el.resultButtons.appendChild(again);
+      el.resultButtons.appendChild(exit);
+
+      el.resultModal.classList.add("on");
+    }
+
+    function showHelpOverlay(){
+      if (state === GameStates.START_SCREEN) return;
+      if (state === GameStates.MONTH_RESULT || state === GameStates.FINAL_RESULT) return;
+      if (state === GameStates.PAUSED) return;
+      state = GameStates.PAUSED;
+      el.helpModal.classList.add("on");
+    }
+
+    function updateHUD(){
+      el.hudMonth.textContent = MONTHS[currentMonth] ?? "—";
+      el.hudQuarter.textContent = QUARTERS[currentQuarter] ?? "—";
+      el.hudTime.textContent = (state === GameStates.START_SCREEN) ? "—" : Math.max(0, Math.ceil(timeLeft)) + "с";
+      el.hudScore.textContent = monthScore;
+      el.hudGoal.textContent = goal;
+      el.hudLives.textContent = lives;
+      el.hudBadCount.textContent = penalties;
+      el.hudRub.textContent = fmtRub(penaltyRub);
+
+      el.barConsult.style.width = pct(consultationCharge) + "%";
+      el.barAnti.style.width = pct(antiPenaltyCharge) + "%";
+      el.hudConsultPct.textContent = pct(consultationCharge) + "%";
+      el.hudAntiPct.textContent = pct(antiPenaltyCharge) + "%";
+
+      el.btnConsult.disabled = !(consultationCharge >= 100) || !(state === GameStates.PLAYING);
+      el.btnAnti.disabled = !(antiPenaltyCharge >= 100) || !(state === GameStates.PLAYING || state === GameStates.CONSULTATION_ACTIVE);
+
+      // звук
+      el.soundIcon.textContent = soundEnabled ? "🔊" : "🔇";
+      el.soundText.textContent = soundEnabled ? "Звук: вкл" : "Звук: выкл";
+    }
+
+    function updateRoundMap(){
+      const cells = Array.from(el.monthMap.children);
+      for (let i = 0; i < cells.length; i++){
+        const c = cells[i];
+        c.classList.toggle("current", i === currentMonth && (state !== GameStates.START_SCREEN));
+        c.classList.toggle("done", completedMonths[i] === true);
+      }
+    }
+
+    function playSound(type){
+      if (!soundEnabled) return;
+      try{
+        if (!audioCtx){
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === "suspended"){
+          audioCtx.resume();
+        }
+
+        const now = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g);
+        g.connect(audioCtx.destination);
+
+        const set = (freq, dur, gain, wave="sine") => {
+          o.type = wave;
+          o.frequency.setValueAtTime(freq, now);
+          g.gain.setValueAtTime(0.0001, now);
+          g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+          o.start(now);
+          o.stop(now + dur + 0.02);
+        };
+
+        switch(type){
+          case "good": set(720, 0.08, 0.12, "triangle"); break;
+          case "special": set(520, 0.10, 0.11, "sine"); break;
+          case "bad": set(160, 0.12, 0.16, "square"); break;
+          case "consult": set(440, 0.16, 0.14, "sine"); break;
+          case "anti": set(310, 0.20, 0.16, "sawtooth"); break;
+          case "life": set(840, 0.12, 0.13, "triangle"); break;
+          case "win": set(660, 0.18, 0.14, "triangle"); break;
+          case "lose": set(190, 0.18, 0.18, "square"); break;
+          case "final": set(740, 0.24, 0.18, "sine"); break;
+          case "stress": set(260, 0.10, 0.10, "sawtooth"); break;
+          case "miss": set(240, 0.07, 0.08, "sine"); break;
+          case "pop": set(380, 0.06, 0.10, "square"); break;
+          case "streak": set(920, 0.09, 0.11, "triangle"); break;
+          default: set(520, 0.05, 0.08, "sine");
+        }
+      } catch(e){
+        // если аудио не поддерживается — игра не ломается
+      }
+    }
+
+    function resetGame(){
+      // глобальный сброс
+      currentMonth = 0;
+      currentQuarter = 0;
+      timeLeft = 0;
+      monthScore = 0;
+      totalScore = 0;
+      goal = 0;
+      requiredScore = 0;
+      lives = 3;
+      penalties = 0;
+      penaltyRub = 0;
+      consultationCharge = 0;
+      antiPenaltyCharge = 0;
+      consultationActive = false;
+      antiPenaltyActive = false;
+      objects.forEach(o => o.el.remove());
+      objects = [];
+      completedMonths = Array(12).fill(false);
+      goodCaught = 0;
+      badCaught = 0;
+      specialCaught = 0;
+      consultationsUsed = 0;
+      antiPenaltiesUsed = 0;
+      bestMonth = { idx: 0, score: -Infinity };
+      hardestMonth = { idx: 0, misses: -Infinity };
+      monthConfig = null;
+      monthBadForLife = 0;
+      goodStreak = 0;
+      antiLast10sBonusGiven = false;
+      assistTimeLeft = 0;
+      antiTimeLeft = 0;
+      antiLifeSpawnedThisMonth = false;
+      toastHide(true);
+      confettiStop();
+      updateHUD();
+      updateRoundMap();
+    }
+
+    // -----------------------------
+    // UI helpers
+    // -----------------------------
+    function showStartScreen(){
+      state = GameStates.START_SCREEN;
+      el.startModal.classList.add("on");
+      el.helpModal.classList.remove("on");
+      el.resultModal.classList.remove("on");
+      updateHUD();
+      updateRoundMap();
+    }
+
+    function closeStart(){
+      el.startModal.classList.remove("on");
+    }
+
+    function closeHelp(){
+      el.helpModal.classList.remove("on");
+      // возвращаемся в активное состояние месяца
+      if (consultationActive) state = GameStates.CONSULTATION_ACTIVE;
+      else if (antiPenaltyActive) state = GameStates.ANTIPENALTY_ACTIVE;
+      else state = GameStates.PLAYING;
+    }
+
+    function closeResult(){
+      el.resultModal.classList.remove("on");
+      el.helpModal.classList.remove("on");
+      // после результатов управление идёт через кнопки (startMonth/showFinalResult)
+    }
+
+    function toastShow(text){
+      el.toast.textContent = text;
+      el.toast.classList.add("on");
+      toastTimer = 2.2;
+    }
+    function toastHide(immediate=false){
+      toastTimer = 0;
+      if (immediate){
+        el.toast.classList.remove("on");
+        return;
+      }
+      el.toast.classList.remove("on");
+    }
+
+    // -----------------------------
+    // Логика жизней/очков
+    // -----------------------------
+    function addScore(delta){
+      monthScore += delta;
+      if (monthScore < 0) monthScore = 0;
+    }
+
+    function loseLife(){
+      lives -= 1;
+      if (lives < 0) lives = 0;
+      const hm = getHelpMultiplier(currentMonth);
+      antiPenaltyCharge = clamp(antiPenaltyCharge + 30 * hm, 0, 100);
+      toastShow("Минус жизнь: нагрузка выросла (+Антиштраф)");
+      playSound("lose");
+      if (lives <= 0){
+        endCurrentMonth(false, "lives");
+      }
+    }
+
+    // -----------------------------
+    // Коллизии/геометрия
+    // -----------------------------
+    function getCatcherRect(){
+      const cW = el.catcher.offsetWidth;
+      const cH = el.catcher.offsetHeight;
+      const areaH = el.gameArea.clientHeight;
+      // Корзина визуально ниже, но ловит верхней частью
+      return {
+        x: catcherX,
+        y: areaH - 16 - cH + 6,
+        w: cW,
+        h: cH - 10
+      };
+    }
+    function aabbHit(a, b){
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function removeObject(obj, withPop){
+      if (!obj.alive) return;
+      obj.alive = false;
+      if (withPop){
+        obj.el.classList.add("pop");
+        setTimeout(() => obj.el.remove(), 180);
+      } else {
+        obj.el.classList.add("pop");
+        setTimeout(() => obj.el.remove(), 180);
+      }
+    }
+    function removeObjectByEl(objEl, withPop){
+      const o = objects.find(x => x.el === objEl);
+      if (o) removeObject(o, withPop);
+    }
+
+    // -----------------------------
+    // Карта месяцев
+    // -----------------------------
+    function buildMonthMap(){
+      el.monthMap.innerHTML = "";
+      for (let i = 0; i < 12; i++){
+        const c = document.createElement("div");
+        c.className = "mcell";
+        c.textContent = MONTHS[i].slice(0,3);
+        c.title = MONTHS[i];
+        el.monthMap.appendChild(c);
+      }
+    }
+
+    // -----------------------------
+    // Ввод/управление
+    // -----------------------------
+    function bindInput(){
+      // мышь двигает корзину
+      el.gameArea.addEventListener("pointerdown", (ev) => {
+        if (state === GameStates.START_SCREEN || state === GameStates.MONTH_RESULT || state === GameStates.FINAL_RESULT) return;
+        if (ev.pointerType === "mouse" && ev.button !== 0) return;
+        pointerActive = true;
+        try{ el.gameArea.setPointerCapture(ev.pointerId); } catch {}
+        const rect = el.gameArea.getBoundingClientRect();
+        const cW = el.catcher.offsetWidth;
+        const px = ev.clientX - rect.left;
+        pointerOffsetX = px - (catcherX + cW/2);
+        moveCatcherToPointer(ev);
+      });
+      el.gameArea.addEventListener("pointermove", (ev) => {
+        if (!pointerActive) return;
+        moveCatcherToPointer(ev);
+      });
+      el.gameArea.addEventListener("pointerup", () => {
+        pointerActive = false;
+      });
+      el.gameArea.addEventListener("pointercancel", () => {
+        pointerActive = false;
+      });
+
+      // клавиатура
+      window.addEventListener("keydown", (ev) => {
+        if (ev.key === "ArrowLeft"){ keyboardLeft = true; ev.preventDefault(); }
+        if (ev.key === "ArrowRight"){ keyboardRight = true; ev.preventDefault(); }
+        if (ev.key === "Escape"){
+          if (el.startModal.classList.contains("on")){
+            // на старте Esc просто закрывает подсказку (но игру не запускает)
+            el.startModal.classList.remove("on");
+          } else if (el.helpModal.classList.contains("on")){
+            closeHelp();
+          } else if (el.resultModal.classList.contains("on")){
+            // результат не закрываем "в никуда" — оставляем
+          } else {
+            showHelpOverlay();
+          }
+        }
+      }, { passive:false });
+      window.addEventListener("keyup", (ev) => {
+        if (ev.key === "ArrowLeft"){ keyboardLeft = false; ev.preventDefault(); }
+        if (ev.key === "ArrowRight"){ keyboardRight = false; ev.preventDefault(); }
+      }, { passive:false });
+
+      // кнопки
+      el.btnStartJan.addEventListener("click", () => {
+        closeStart();
+        startMonth(0);
+      });
+      el.btnStartApr.addEventListener("click", () => {
+        closeStart();
+        startMonth(3);
+      });
+      el.btnStartClose.addEventListener("click", () => {
+        el.startModal.classList.remove("on");
+      });
+
+      el.btnHelp.addEventListener("click", () => showHelpOverlay());
+      el.btnHelpClose.addEventListener("click", () => closeHelp());
+      el.btnHelpCloseTop.addEventListener("click", () => closeHelp());
+
+      el.btnConsult.addEventListener("click", () => activateConsultation());
+      el.btnAnti.addEventListener("click", () => activateAntiPenalty());
+
+      el.btnSound.addEventListener("click", async () => {
+        soundEnabled = !soundEnabled;
+        if (soundEnabled){
+          try{
+            if (!audioCtx){
+              audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === "suspended") await audioCtx.resume();
+          } catch {}
+          playSound("click");
+        }
+        updateHUD();
+      });
+
+      el.btnResultCloseTop.addEventListener("click", () => {
+        // оставляем модал, т.к. закрыть его без выбора — странно
+        playSound("click");
+      });
+    }
+
+    function moveCatcherToPointer(ev){
+      if (state === GameStates.PAUSED) return;
+      const rect = el.gameArea.getBoundingClientRect();
+      const cW = el.catcher.offsetWidth;
+      const px = ev.clientX - rect.left;
+      const desiredCenter = px - pointerOffsetX;
+      catcherTargetX = desiredCenter - cW / 2;
+    }
+
+    // -----------------------------
+    // Конфетти (только в финале)
+    // -----------------------------
+    function resizeConfetti(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const w = el.gameArea.clientWidth;
+      const h = el.gameArea.clientHeight;
+      el.confetti.width = Math.floor(w * dpr);
+      el.confetti.height = Math.floor(h * dpr);
+      const ctx = el.confetti.getContext("2d");
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener("resize", () => resizeConfetti());
+
+    function confettiStart(){
+      confettiOn = true;
+      el.confetti.classList.add("on");
+      confettiParts = [];
+      confettiLast = performance.now();
+      for (let i = 0; i < 160; i++){
+        confettiParts.push({
+          x: rand(0, el.gameArea.clientWidth),
+          y: rand(-el.gameArea.clientHeight, 0),
+          vx: rand(-60, 60),
+          vy: rand(90, 220),
+          s: rand(4, 10),
+          r: rand(0, Math.PI * 2),
+          vr: rand(-5, 5),
+          c: pick(["#2563eb","#16a34a","#10b981","#d4a017","#60a5fa","#34d399","#fde047"])
+        });
+      }
+    }
+    function confettiStop(){
+      confettiOn = false;
+      el.confetti.classList.remove("on");
+      const ctx = el.confetti.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, el.gameArea.clientWidth, el.gameArea.clientHeight);
+    }
+    function updateConfetti(ts){
+      const ctx = el.confetti.getContext("2d");
+      if (!ctx) return;
+      const dt = Math.min(0.05, (ts - confettiLast) / 1000);
+      confettiLast = ts;
+      const w = el.gameArea.clientWidth;
+      const h = el.gameArea.clientHeight;
+      ctx.clearRect(0, 0, w, h);
+      for (const p of confettiParts){
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.r += p.vr * dt;
+        p.vx *= 0.995;
+        if (p.y > h + 20){
+          p.y = rand(-60, -10);
+          p.x = rand(0, w);
+          p.vy = rand(120, 260);
+          p.vx = rand(-80, 80);
+        }
+        if (p.x < -20) p.x = w + 20;
+        if (p.x > w + 20) p.x = -20;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.fillStyle = p.c;
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(-p.s/2, -p.s/2, p.s, p.s * 0.7);
+        ctx.restore();
+      }
+    }
+
+    // -----------------------------
+    // Прочее
+    // -----------------------------
+    function cryptoRandomId(){
+      // короткий id без длинных хэшей
+      if (window.crypto && crypto.getRandomValues){
+        const a = new Uint32Array(1);
+        crypto.getRandomValues(a);
+        return "o" + a[0].toString(16);
+      }
+      return "o" + Math.floor(Math.random() * 1e9).toString(16);
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, (ch) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+      }[ch]));
+    }
+
+    // -----------------------------
+    // Запуск
+    // -----------------------------
+    initGame();
+    startGame();
+
+    // автосброс pointerActive если курсор ушёл
+    window.addEventListener("blur", () => { pointerActive = false; keyboardLeft = false; keyboardRight = false; });
+  </script>
+</body>
+</html>
