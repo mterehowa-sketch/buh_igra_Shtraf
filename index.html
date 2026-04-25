@@ -641,7 +641,8 @@
     const monthGoals = [150,170,190,200,220,240,250,270,290,300,320,340];
 
     const GOOD_LABELS = ["Доход","Отчёт","Документы","Вычет","Срок","Акт","Платёж"];
-    const BAD_LABELS = ["Штраф","Пени","Ошибка","Фейк","Просрочка","Хаос"];
+    // "Фейк" делаем встречающимся чаще, чтобы мешал сбору полезного.
+    const BAD_LABELS = ["Штраф","Пени","Ошибка","Фейк","Фейк","Фейк","Просрочка","Хаос"];
     const SPECIAL_LABELS = ["Совет","Консультация","Подсказка","Бухгалтер","Щит"];
 
     const PENALTY_RUB_VALUES = [1000,3000,5000,7000];
@@ -756,11 +757,16 @@
     let assistTimeLeft = 0;
     let antiTimeLeft = 0;
     let antiLifeSpawnedThisMonth = false;
+    let lastSpawnType = "good";
+    let badStreakSpawned = 0;
+    let lastSpawnX = 0;
 
     // Конфетти
     let confettiOn = false;
     let confettiParts = [];
     let confettiLast = 0;
+    let fireworksParts = [];
+    let fireworksAcc = 0;
 
     // Аудио
     let audioCtx = null;
@@ -805,7 +811,8 @@
       monthConfig = getMonthConfig(currentMonth);
 
       goal = monthConfig.goal;
-      requiredScore = Math.ceil(goal * 0.95);
+      // Допуск по запросу: минимально необходимое отклонение — 10 очков
+      requiredScore = Math.max(0, goal - 10);
       timeLeft = monthConfig.duration;
       monthScore = 0;
       lives = 3;
@@ -820,6 +827,9 @@
       // чистим объекты
       objects.forEach(o => o.el.remove());
       objects = [];
+      lastSpawnType = "good";
+      badStreakSpawned = 0;
+      lastSpawnX = 0;
 
       // положение корзины
       const areaW = el.gameArea.clientWidth;
@@ -851,12 +861,23 @@
       const quarter = Math.floor(index / 3);
       const monthInQuarter = index % 3;
 
-      // Базовая идея: скорость растёт, спавн чаще, шанс красных растёт, шанс спец чуть падает.
-      // Будем держать баланс так, чтобы помощь успевала накапливаться (за счёт helpMultiplier).
-      const baseSpeed = 86 + quarter * 20 + monthInQuarter * 13; // px/s
-      const spawn = Math.max(560, 1080 - quarter * 90 - monthInQuarter * 70); // ms
-      const badChance = Math.min(0.48, 0.18 + quarter * 0.04 + monthInQuarter * 0.035);
-      const specialChance = Math.max(0.08, 0.13 - quarter * 0.006);
+      // Сложность: почти как прежний "декабрь", но растёт от месяца к месяцу.
+      // Помощь (консультация/антиштраф) должна быть заметно полезной, иначе станет скучно.
+      let baseSpeed = 112 + quarter * 26 + monthInQuarter * 16 + index * 2; // px/s
+      let spawn = Math.max(500, 880 - quarter * 70 - monthInQuarter * 55 - index * 3); // ms
+      let badChance = Math.min(0.64, 0.30 + quarter * 0.06 + monthInQuarter * 0.05 + index * 0.004);
+      // Спец-объекты делаем более редкими и "желанными"
+      let specialChance = Math.max(0.05, 0.085 - quarter * 0.006);
+
+      // Январь: чуть мягче как вводный, но уже бодро
+      if (index === 0){
+        baseSpeed -= 18;
+        spawn += 80;
+        badChance = Math.max(0.22, badChance - 0.10);
+      }
+
+      // не даём спецам "съесть" зелёные — держим небольшой коридор
+      specialChance = clamp(specialChance, 0.04, 0.085);
       const duration = index < 3 ? 35 : index < 9 ? 38 : 40;
 
       return { speed: baseSpeed, spawn, badChance, specialChance, duration, goal: monthGoals[index] };
@@ -878,13 +899,14 @@
 
       if (isConsult){
         // спец чуть чаще, красные слабее (но могут появляться)
-        specialChance = clamp(specialChance + 0.03, 0.08, 0.20);
-        badChance = clamp(badChance * 0.85, 0.08, 0.50);
+        specialChance = clamp(specialChance + 0.02, 0.05, 0.14);
+        // во время консультации красные "останавливаются" (см. updateObjects), поэтому их можно не сильно резать по вероятности
+        badChance = clamp(badChance * 0.98, 0.10, 0.60);
         goodChance = clamp(1 - badChance - specialChance, 0.35, 0.85);
       }
       if (isAnti){
         badChance = 0.02;
-        specialChance = clamp(specialChance + 0.05, 0.10, 0.28);
+        specialChance = clamp(specialChance + 0.03, 0.06, 0.18);
         goodChance = clamp(1 - badChance - specialChance, 0.50, 0.95);
       }
 
@@ -892,6 +914,17 @@
       let type = "good";
       if (roll < badChance) type = "bad";
       else if (roll < badChance + specialChance) type = "special";
+
+      // Анти-стрик: не даём красным идти слишком длинной серией.
+      if (type === "bad"){
+        badStreakSpawned += 1;
+        if (badStreakSpawned >= 3){
+          type = (Math.random() < 0.70) ? "good" : "special";
+          badStreakSpawned = 0;
+        }
+      } else {
+        badStreakSpawned = 0;
+      }
 
       // Бонусная жизнь появляется только в антиштрафе (редко, максимум 1 за месяц).
       if (isAnti && !antiLifeSpawnedThisMonth && lives < 4 && Math.random() < 0.10){
@@ -915,7 +948,26 @@
       const w = type === "life" ? 92 : clamp(86 + label.length * 3.4, 86, 150);
       objEl.style.width = w + "px";
 
-      const x = clamp(rand(pad, areaW - w - pad), pad, Math.max(pad, areaW - w - pad));
+      // Спавн по всему полю, но избегаем "туннеля" из красных прямо над корзиной.
+      const minDist = Math.min(220, areaW * 0.22);
+      const catcherCenter = catcherX + el.catcher.offsetWidth / 2;
+      const pickX = () => clamp(rand(pad, areaW - w - pad), pad, Math.max(pad, areaW - w - pad));
+      let x = pickX();
+      for (let i = 0; i < 6; i++){
+        const cand = pickX();
+        const distLast = Math.abs(cand - lastSpawnX);
+        const distCatcher = Math.abs((cand + w/2) - catcherCenter);
+        const badTooClose = (type === "bad") && (distCatcher < el.catcher.offsetWidth * 0.55);
+        if (distLast >= minDist && !badTooClose){
+          x = cand;
+          break;
+        }
+        // если все кандидаты "плохие", берём самый дальний от корзины для красного
+        if (type === "bad" && distCatcher > Math.abs((x + w/2) - catcherCenter)){
+          x = cand;
+        }
+      }
+      lastSpawnX = x;
       const y = -60;
       // Позиционируем объекты через transform, чтобы избежать двойных смещений (left + transform).
       objEl.style.left = "0px";
@@ -938,7 +990,8 @@
 
       el.gameArea.appendChild(objEl);
 
-      const speedMul = consultationActive ? 0.80 : antiPenaltyActive ? 0.88 : 1.0; // консультация замедляет на ~20%
+      // По запросу: во время помощи объекты летят чуть быстрее, но без увеличения количества (спавн не меняем).
+      const speedMul = consultationActive ? 1.08 : antiPenaltyActive ? 1.03 : 1.0;
 
       const obj = {
         id: cryptoRandomId(),
@@ -1081,7 +1134,10 @@
           o.x += o.drift * dt;
         }
 
-        o.y += o.vy * dt;
+        // Во время консультации красные объекты временно "замирают" (потребность в помощи растёт),
+        // а полезные летят чуть быстрее (см. speedMul в spawnObject).
+        const vyMul = (consultationActive && o.type === "bad") ? 0.12 : 1.0;
+        o.y += (o.vy * vyMul) * dt;
         o.x = clamp(o.x, 6, areaW - o.w - 6);
 
         // красные в антиштрафе появляются и тут же лопаются
@@ -1143,7 +1199,7 @@
         const hm = getHelpMultiplier(currentMonth);
         consultationCharge = clamp(consultationCharge + 35 * hm, 0, 100);
 
-        // небольшой бонус очков
+        // небольшой бонус очков (оставляем, но спецов стало меньше)
         const add = antiPenaltyActive ? 8 : 3;
         addScore(add);
 
@@ -1179,7 +1235,7 @@
         goodStreak = 0;
         penalties++;
 
-        // красные слабее в консультации
+        // красные слабее в консультации (меньше мешают набору, но всё ещё неприятны)
         const delta = consultationActive ? -8 : -15;
         addScore(delta);
 
@@ -1229,7 +1285,8 @@
 
       consultationCharge = 0;
       consultationActive = true;
-      assistTimeLeft = 7;
+      // Чуть короче, чтобы помощь была ценной, но не ломала баланс
+      assistTimeLeft = 6;
       consultationsUsed++;
       state = GameStates.CONSULTATION_ACTIVE;
 
@@ -1502,6 +1559,8 @@
       // конфетти только в финале
       confettiStart();
       playSound("final");
+      // небольшой "салют" поверх конфетти как награда
+      fireworksStart();
 
       // финальный экран через resultModal (переиспользуем)
       const finalWinTexts = [
@@ -1546,9 +1605,10 @@
       const exit = document.createElement("button");
       exit.className = "btn";
       exit.type = "button";
-      exit.textContent = "Выйти из игры";
+      exit.textContent = "Закончить игру";
       exit.addEventListener("click", () => {
         confettiStop();
+        fireworksStop();
         // Спокойный экран выхода (без изменения механики игры)
         el.resultTitle.textContent = "Игра завершена";
         el.resultSubtitle.textContent = "Бухгалтерский год закрыт. Можно выдохнуть.";
@@ -1747,6 +1807,8 @@
     function addScore(delta){
       monthScore += delta;
       if (monthScore < 0) monthScore = 0;
+      // Ограничение перебора: максимум "план + 50" за месяц
+      if (goal > 0) monthScore = Math.min(monthScore, goal + 50);
     }
 
     function loseLife(){
@@ -1950,6 +2012,7 @@
     function confettiStop(){
       confettiOn = false;
       el.confetti.classList.remove("on");
+      fireworksStop();
       const ctx = el.confetti.getContext("2d");
       if (ctx) ctx.clearRect(0, 0, el.gameArea.clientWidth, el.gameArea.clientHeight);
     }
@@ -1982,6 +2045,103 @@
         ctx.fillRect(-p.s/2, -p.s/2, p.s, p.s * 0.7);
         ctx.restore();
       }
+
+      // салют + шарики/цветы (простые частицы) — только когда включено в финале
+      if (fireworksParts.length){
+        fireworksAcc += dt;
+        // периодически запускаем новые "взрывы"
+        while (fireworksAcc > 0.22){
+          fireworksAcc -= 0.22;
+          fireworksBurst(w, h);
+        }
+        updateFireworks(ctx, dt, w, h);
+      }
+    }
+
+    function fireworksStart(){
+      fireworksParts = [];
+      fireworksAcc = 0;
+      // быстрый старт нескольких вспышек
+      const w = el.gameArea.clientWidth;
+      const h = el.gameArea.clientHeight;
+      for (let i = 0; i < 4; i++) fireworksBurst(w, h);
+      // победный короткий сигнал дополнительно к "final"
+      setTimeout(() => playSound("win"), 180);
+    }
+    function fireworksStop(){
+      fireworksParts = [];
+      fireworksAcc = 0;
+    }
+    function fireworksBurst(w, h){
+      const cx = rand(w * 0.15, w * 0.85);
+      const cy = rand(h * 0.10, h * 0.40);
+      const palette = ["#2563eb","#16a34a","#10b981","#d4a017","#60a5fa","#34d399","#fde047","#fb7185"];
+      const n = randi(14, 22);
+      for (let i = 0; i < n; i++){
+        const a = (Math.PI * 2) * (i / n) + rand(-0.12, 0.12);
+        const sp = rand(140, 260);
+        fireworksParts.push({
+          kind: "spark",
+          x: cx, y: cy,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          life: rand(0.7, 1.1),
+          r: rand(2.0, 3.6),
+          c: pick(palette)
+        });
+      }
+      // шарики/цветочки вверх
+      const m = randi(3, 5);
+      for (let j = 0; j < m; j++){
+        fireworksParts.push({
+          kind: "balloon",
+          x: rand(0, w),
+          y: h + rand(10, 80),
+          vx: rand(-18, 18),
+          vy: -rand(35, 70),
+          life: rand(2.2, 3.2),
+          r: rand(8, 14),
+          c: pick(palette),
+          wob: rand(2, 6)
+        });
+      }
+    }
+    function updateFireworks(ctx, dt, w, h){
+      for (const p of fireworksParts){
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.kind === "spark"){
+          p.vy += 260 * dt;
+          p.vx *= 0.985;
+          p.vy *= 0.985;
+          ctx.save();
+          ctx.globalAlpha = clamp(p.life, 0, 1);
+          ctx.fillStyle = p.c;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else {
+          // balloon/flower
+          const t = (Math.sin((performance.now()/1000) * 2 + p.x * 0.02) * p.wob);
+          ctx.save();
+          ctx.globalAlpha = clamp(p.life / 2.5, 0, 1);
+          ctx.fillStyle = p.c;
+          ctx.beginPath();
+          ctx.ellipse(p.x + t, p.y, p.r * 0.85, p.r, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // маленькая "ленточка"
+          ctx.strokeStyle = "rgba(11,18,32,.18)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(p.x + t, p.y + p.r);
+          ctx.lineTo(p.x + t + rand(-8, 8), p.y + p.r + 18);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      fireworksParts = fireworksParts.filter(p => p.life > 0 && p.y < h + 120 && p.x > -120 && p.x < w + 120);
     }
 
     // -----------------------------
